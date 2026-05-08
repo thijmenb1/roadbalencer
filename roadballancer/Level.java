@@ -147,6 +147,10 @@ public class Level extends World
                                 money -= 2; 
                                 map[effected_row][effected_col] = selected_tile;
                             }
+                            if (map[effected_row][effected_col] == 33) {
+                                money -= 5; 
+                                map[effected_row][effected_col] = selected_tile;
+                            }
                          }
                     }
                     if (mouse.getButton() == 3){
