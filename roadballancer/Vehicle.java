@@ -18,7 +18,9 @@ public class Vehicle extends Actor
     private int target_col;
     private int recalcCooldown = 0;
     private int targetX, targetY;
-    private int speed = 1; // pixels per frame
+    private double posX, posY;
+    private double speed = 64.0; // pixels per second
+    private long lastActTime = 0;
     private boolean moving = false;
     private List<int[]> path;
     /**
@@ -54,40 +56,57 @@ public class Vehicle extends Actor
 
             // Smooth movement
         if (moving) {
-            int dx = targetX - getX();
-            int dy = targetY - getY();
-    
+            if (lastActTime == 0) {
+                lastActTime = System.nanoTime();
+            }
+            long now = System.nanoTime();
+            double deltaSeconds = (now - lastActTime) / 1_000_000_000.0;
+            lastActTime = now;
+            if (deltaSeconds <= 0) {
+                return;
+            }
+
+            double dx = targetX - posX;
+            double dy = targetY - posY;
+            double distance = speed * deltaSeconds;
+
             // Calculate angle (with offset because sprite faces UP)
             int targetAngle = (int)Math.toDegrees(Math.atan2(dy, dx)) + 90;
-    
+
             // Smooth rotation
             int current = getRotation();
             int diff = targetAngle - current;
-    
+
             if (diff > 180) diff -= 360;
             if (diff < -180) diff += 360;
-    
+
             int turnSpeed = 5;
-    
+
             if (Math.abs(diff) < turnSpeed) {
                 setRotation(targetAngle);
             } else {
                 setRotation(current + (diff > 0 ? turnSpeed : -turnSpeed));
             }
 
-            // Move toward target
-            if (Math.abs(dx) <= speed && Math.abs(dy) <= speed) {
+            double distanceToTarget = Math.hypot(dx, dy);
+            if (distanceToTarget <= distance) {
+                posX = targetX;
+                posY = targetY;
                 setLocation(targetX, targetY);
                 moving = false;
             } else {
-                int moveX = (int)Math.signum(dx) * speed;
-                int moveY = (int)Math.signum(dy) * speed;
-                setLocation(getX() + moveX, getY() + moveY);
+                double moveX = Math.cos(Math.atan2(dy, dx)) * distance;
+                double moveY = Math.sin(Math.atan2(dy, dx)) * distance;
+                posX += moveX;
+                posY += moveY;
+                setLocation((int)Math.round(posX), (int)Math.round(posY));
             }
         }
     }
     public void addedToWorld(World world) {
-        setLocation(current_col * 32 + 16, current_row * 32 + 16);
+        posX = current_col * 32 + 16;
+        posY = current_row * 32 + 16;
+        setLocation((int)Math.round(posX), (int)Math.round(posY));
         path = findPath(current_row, current_col, target_row, target_col);
         System.out.println("path calculated: " + path);
     }       
@@ -169,6 +188,10 @@ public class Vehicle extends Actor
     
         // Crossroad
         if (tile == 3) return true;
+
+        // river crossings (bridges)
+        if (tile == 26) return (dr == -1 || dr == 1); // RIVER_CROSSING_V
+        if (tile == 27) return (dc == -1 || dc == 1); // RIVER_CROSSING_H
     
         // T junctions
         if (tile == 4) return (dr == -1 || dr == 1 || dc == 1); // right

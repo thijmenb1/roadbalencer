@@ -14,6 +14,20 @@ public class Level extends World
     private int effected_row;
     private boolean rKeyWasDown = false;
     
+    private static final int GRASS = 0;
+    private static final int ROAD_V = 1;
+    private static final int ROAD_H = 2;
+    private static final int FOREST = 32;
+    private static final int HOUSE = 33;
+    private static final int RIVER_V = 24;
+    private static final int RIVER_H = 25;
+    private static final int RIVER_CROSSING_V = 26;
+    private static final int RIVER_CROSSING_H = 27;
+    private static final int RIVER_CORNER_NE = 28;
+    private static final int RIVER_CORNER_NW = 29;
+    private static final int RIVER_CORNER_SW = 30;
+    private static final int RIVER_CORNER_SE = 31;
+    
     public static boolean game_started = false;
     public static int selected_tile = 1;
     public static int row_depot_pickup_1 = 5;
@@ -36,11 +50,11 @@ public class Level extends World
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 25, 25, 25, 0, 0, 0, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        { 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        { 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        { 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     };
@@ -70,7 +84,7 @@ public class Level extends World
      22 = factory_y
      23 = sellpoint
      24 = river_v
-     25 = rivr_h
+     25 = river_h
      26 = river_crosing_v
      27 = river_crosing_h
      28 = river_corner_NE
@@ -128,38 +142,103 @@ public class Level extends World
     }
     private void drawRoads() {
         MouseInfo mouse = Greenfoot.getMouseInfo();
-        int mouse_x;
-        int mouse_y;
-        if (mouse != null){
-            mouse_x = mouse.getX();
-            mouse_y = mouse.getY();
-            effected_col = mouse_x / 32;
-            effected_row = mouse_y / 32;
-            if (Greenfoot.mouseClicked(null)){
-                if (game_started == false){
-                    if (mouse.getButton() == 1){
-                        if (money != 0){
-                            if (map[effected_row][effected_col] == 0) {
-                                money--; 
-                                map[effected_row][effected_col] = selected_tile;
-                            }
-                            if (map[effected_row][effected_col] == 32) {
-                                money -= 2; 
-                                map[effected_row][effected_col] = selected_tile;
-                            }
-                            if (map[effected_row][effected_col] == 33) {
-                                money -= 5; 
-                                map[effected_row][effected_col] = selected_tile;
-                            }
-                         }
-                    }
-                    if (mouse.getButton() == 3){
-                        if (map[effected_row][effected_col] != 0) {money++;};
-                        map[effected_row][effected_col] = 0;
-                    }
-                }
-            }
+        if (mouse == null) {
+            return;
         }
+
+        effected_col = mouse.getX() / Tile_Size;
+        effected_row = mouse.getY() / Tile_Size;
+
+        if (!Greenfoot.mouseClicked(null) || game_started) {
+            return;
+        }
+
+        if (mouse.getButton() == 1) {
+            handleLeftClick();
+        } else if (mouse.getButton() == 3) {
+            handleRightClick();
+        }
+    }
+
+    private void handleLeftClick() {
+        if (money == 0) {
+            return;
+        }
+
+        int currentTile = map[effected_row][effected_col];
+
+        switch (currentTile) {
+            case GRASS:
+                money--;
+                map[effected_row][effected_col] = selected_tile;
+                break;
+            case FOREST:
+                money -= 2;
+                map[effected_row][effected_col] = selected_tile;
+                break;
+            case HOUSE:
+                money -= 5;
+                map[effected_row][effected_col] = selected_tile;
+                break;
+            case RIVER_CORNER_NE:
+            case RIVER_CORNER_NW:
+            case RIVER_CORNER_SW:
+            case RIVER_CORNER_SE:
+                System.out.println("cant build on river corners");
+                break;
+            case RIVER_V:
+                if (selected_tile == ROAD_H) {
+                    money -= 3;
+                    map[effected_row][effected_col] = RIVER_CROSSING_H;
+                } else {
+                    System.out.println("cannot build non-straight bridge on river");
+                }
+                break;
+            case RIVER_H:
+                if (selected_tile == ROAD_V) {
+                    money -= 3;
+                    map[effected_row][effected_col] = RIVER_CROSSING_V;
+                } else {
+                    System.out.println("cannot build non-straight bridge on river");
+                }
+                break;
+            case RIVER_CROSSING_V:
+            case RIVER_CROSSING_H:
+                System.out.println("already a bridge here");
+                break;
+            default:
+                map[effected_row][effected_col] = selected_tile;
+        }
+    }
+
+    private void handleRightClick() {
+        int currentTile = map[effected_row][effected_col];
+
+        if (currentTile == RIVER_CROSSING_V) {
+            money += 3;
+            map[effected_row][effected_col] = RIVER_H;
+            return;
+        }
+
+        if (currentTile == RIVER_CROSSING_H) {
+            money += 3;
+            map[effected_row][effected_col] = RIVER_V;
+            return;
+        }
+
+        if (currentTile == GRASS
+                || currentTile == RIVER_V
+                || currentTile == RIVER_H
+                || currentTile == RIVER_CORNER_NE
+                || currentTile == RIVER_CORNER_NW
+                || currentTile == RIVER_CORNER_SW
+                || currentTile == RIVER_CORNER_SE) {
+            System.out.println("cannot remove rivers");
+            return;
+        }
+
+        money++;
+        map[effected_row][effected_col] = GRASS;
     }
     private void selectTile() {
         if (Greenfoot.isKeyDown("1")) { selected_tile = 1; }    //straight
