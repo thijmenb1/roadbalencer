@@ -11,25 +11,32 @@ public class Level extends World
 
     private boolean rKeyWasDown = false;
 
+    private int animationCounter = 0;
+    private static final int[] DRILL_ANIMATION_FRAMES = {39, 40, 41, 42};
+    private static final int ANIMATION_SPEED = 60;
+
     // TILE IDS
     private static final int GRASS = 0;
 
     private static final int ROAD_V = 1;
     private static final int ROAD_H = 2;
 
-    private static final int FOREST = 32;
-    private static final int HOUSE = 33;
+    private static final int CROSS = 3;
 
-    private static final int RIVER_V = 24;
-    private static final int RIVER_H = 25;
+    private static final int T_JUNCTION_UP = 4;
+    private static final int T_JUNCTION_RIGHT = 5;
+    private static final int T_JUNCTION_DOWN = 6;
+    private static final int T_JUNCTION_LEFT = 7;
 
-    private static final int RIVER_CROSSING_V = 26;
-    private static final int RIVER_CROSSING_H = 27;
+    private static final int CORNER_NE = 8;
+    private static final int CORNER_SE = 9;
+    private static final int CORNER_SW = 10;
+    private static final int CORNER_NW = 11;
 
-    private static final int RIVER_CORNER_NE = 28;
-    private static final int RIVER_CORNER_NW = 29;
-    private static final int RIVER_CORNER_SW = 30;
-    private static final int RIVER_CORNER_SE = 31;
+    private static final int DEPOT_PICKUP_LEFT = 12;
+    private static final int DEPOT_PICKUP_DOWN = 13;
+    private static final int DEPOT_PICKUP_RIGHT = 14;
+    private static final int DEPOT_PICKUP_UP = 15;
 
     private static final int RESOURCE_1 = 16;
     private static final int RESOURCE_2 = 17;
@@ -38,6 +45,37 @@ public class Level extends World
     private static final int FACTORY_1 = 20;
     private static final int FACTORY_2 = 21;
     private static final int FACTORY_3 = 22;
+
+    private static final int RIVER_CROSSING_V = 26;
+    private static final int RIVER_CROSSING_H = 27;
+
+    private static final int RIVER_V = 24;
+    private static final int RIVER_H = 25;
+
+    private static final int RIVER_CORNER_NE = 28;
+    private static final int RIVER_CORNER_NW = 29;
+    private static final int RIVER_CORNER_SW = 30;
+    private static final int RIVER_CORNER_SE = 31;
+
+    private static final int FOREST = 32;
+    private static final int HOUSE = 33;
+
+    private static final int DRILL_RESOURCE_1_2 = 36;
+    private static final int DRILL_RESOURCE_2_2 = 37;
+    private static final int DRILL_RESOURCE_3_2 = 38;
+    private static final int DRILL = 39;
+    private static final int DRILL_RESOURCE_1 = 40;
+    private static final int DRILL_RESOURCE_2 = 41;
+    private static final int DRILL_RESOURCE_3 = 42;
+
+    public static final int[] QUICK_SELECT_TILES = {
+        ROAD_V,
+        CORNER_NW,
+        ROAD_H,
+        T_JUNCTION_UP,
+        DEPOT_PICKUP_RIGHT,
+        DRILL
+    };
 
     private static final int RESOURCE_FACTORY_PAIRS = 1;
 
@@ -53,11 +91,12 @@ public class Level extends World
 
     private boolean firstDepotPlaced = false;
     private boolean secondDepotPlaced = false;
+    private boolean vehicleSpawned = false;
 
     private boolean building = false;
     private boolean removing = false;
 
-    public static int money = 100;
+    public static int money = 999999;
 
     public static int[][] map = new int[32][32];
 
@@ -75,12 +114,14 @@ public class Level extends World
 
         drawMap();
 
-        addObject(new ui(), 56, 76);
+        addObject(new ui(), 976, 920);
 
     }
     public void act()
     {
         selectTile();
+
+        animationCounter++;
 
         drawMap();
 
@@ -212,13 +253,65 @@ public class Level extends World
             }
         }
     }
+
+    private void spawnVehicle()
+    {
+        int x = col_depot_pickup_1 * Tile_Size + Tile_Size / 2;
+        int y = row_depot_pickup_1 * Tile_Size + Tile_Size / 2;
+        
+        String color = getDrillColor(row_depot_pickup_1, col_depot_pickup_1);
+        
+        addObject(
+            new Vehicle(
+                row_depot_pickup_1,
+                col_depot_pickup_1,
+                row_depot_dropof_1,
+                col_depot_dropof_1,
+                color,
+                true
+            ),
+            x,
+            y
+        );
+    }
+    
+    private String getDrillColor(int row, int col)
+    {
+        int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        
+        for (int[] dir : directions)
+        {
+            int newRow = row + dir[0];
+            int newCol = col + dir[1];
+            
+            if (newRow >= 0 && newRow < map.length && newCol >= 0 && newCol < map[0].length)
+            {
+                int tile = map[newRow][newCol];
+                
+                if (tile == DRILL_RESOURCE_1 || tile == DRILL_RESOURCE_1_2 || tile == RESOURCE_1)
+                {
+                    return "red";
+                }
+                else if (tile == DRILL_RESOURCE_2 || tile == DRILL_RESOURCE_2_2 || tile == RESOURCE_2)
+                {
+                    return "blue";
+                }
+                else if (tile == DRILL_RESOURCE_3 || tile == DRILL_RESOURCE_3_2 || tile == RESOURCE_3)
+                {
+                    return "yellow";
+                }
+            }
+        }
+        
+        return "red"; // Default to red if no adjacent drill found
+    }
     private void loadTiles()
     {
         GreenfootImage sheet = new GreenfootImage("tilemap_concept.png");
 
-        tiles = new GreenfootImage[36];
+        tiles = new GreenfootImage[44];
 
-        for (int i = 0; i < 36; i++)
+        for (int i = 0; i < 44; i++)
         {
             int col = i % 4;
 
@@ -239,8 +332,18 @@ public class Level extends World
         {
             for (int col = 0; col < map[row].length; col++)
             {
+                int tileId = map[row][col];
+
+                if (tileId == DRILL_RESOURCE_1 || tileId == DRILL_RESOURCE_1_2) {
+                    tileId = (animationCounter / ANIMATION_SPEED) % 2 == 0 ? DRILL_RESOURCE_1 : DRILL_RESOURCE_1_2;
+                } else if (tileId == DRILL_RESOURCE_2 || tileId == DRILL_RESOURCE_2_2) {
+                    tileId = (animationCounter / ANIMATION_SPEED) % 2 == 0 ? DRILL_RESOURCE_2 : DRILL_RESOURCE_2_2;
+                } else if (tileId == DRILL_RESOURCE_3 || tileId == DRILL_RESOURCE_3_2) {
+                    tileId = (animationCounter / ANIMATION_SPEED) % 2 == 0 ? DRILL_RESOURCE_3 : DRILL_RESOURCE_3_2;
+                }
+
                 bg.drawImage(
-                    tiles[map[row][col]],
+                    tiles[tileId],
                     col * Tile_Size,
                     row * Tile_Size
                 );
@@ -259,6 +362,11 @@ public class Level extends World
         effected_col = mouse.getX() / Tile_Size;
 
         effected_row = mouse.getY() / Tile_Size;
+
+        if (effected_col < 0 || effected_col >= map[0].length || effected_row < 0 || effected_row >= map.length)
+        {
+            return;
+        }
 
         if (Greenfoot.mousePressed(null))
         {
@@ -305,7 +413,7 @@ public class Level extends World
     }
     private void handleLeftClick()
     {
-        if (map[effected_row][effected_col] == selected_tile)
+        if (effected_row < 0 || effected_row >= map.length || effected_col < 0 || effected_col >= map[0].length)
         {
             return;
         }
@@ -317,27 +425,47 @@ public class Level extends World
 
         int currentTile = map[effected_row][effected_col];
 
+        if (currentTile == selected_tile)
+        {
+            return;
+        }
+
         switch (currentTile)
         {
             case GRASS:
-                money--;
-                map[effected_row][effected_col] = selected_tile;
+                if (selected_tile != DRILL)
+                {
+                    money--;
+                    map[effected_row][effected_col] = selected_tile;
+                    if (selected_tile >= 12 && selected_tile <= 15)
+                    {
+                        checkAndSetDepot(effected_row, effected_col);
+                    }
+                }
                 break;
 
             case FOREST:
-                money -= 2;
-                map[effected_row][effected_col] = selected_tile;
+                if (selected_tile != DRILL)
+                {
+                    money -= 2;
+                    map[effected_row][effected_col] = selected_tile;
+                    if (selected_tile >= 12 && selected_tile <= 15)
+                    {
+                        checkAndSetDepot(effected_row, effected_col);
+                    }
+                }
                 break;
 
             case HOUSE:
-                money -= 5;
-                map[effected_row][effected_col] = selected_tile;
-                break;
-
-            case RIVER_CORNER_NE:
-            case RIVER_CORNER_NW:
-            case RIVER_CORNER_SW:
-            case RIVER_CORNER_SE:
+                if (selected_tile != DRILL)
+                {
+                    money -= 5;
+                    map[effected_row][effected_col] = selected_tile;
+                    if (selected_tile >= 12 && selected_tile <= 15)
+                    {
+                        checkAndSetDepot(effected_row, effected_col);
+                    }
+                }
                 break;
 
             case RIVER_V:
@@ -356,98 +484,214 @@ public class Level extends World
                 }
                 break;
 
+            case RESOURCE_1:
+                if (selected_tile == DRILL)
+                {
+                    money -= 5;
+                    map[effected_row][effected_col] = 40;
+                    checkAndSetDepot(effected_row, effected_col);
+                }
+                break;
+
+            case RESOURCE_2:
+                if (selected_tile == DRILL)
+                {
+                    money -= 5;
+                    map[effected_row][effected_col] = 41;
+                    checkAndSetDepot(effected_row, effected_col);
+                }
+                break;
+            
+            case RESOURCE_3:
+                if (selected_tile == DRILL)
+                {
+                    money -= 5;
+                    map[effected_row][effected_col] = 42;
+                    checkAndSetDepot(effected_row, effected_col);
+                }
+                break;
+            
+            case RIVER_CORNER_NE:
+            case RIVER_CORNER_NW:
+            case RIVER_CORNER_SW:
+            case RIVER_CORNER_SE:
             case RIVER_CROSSING_V:
             case RIVER_CROSSING_H:
+            case DRILL_RESOURCE_1:
+            case DRILL_RESOURCE_2:
+            case DRILL_RESOURCE_3:
                 break;
 
             default:
                 map[effected_row][effected_col] = selected_tile;
+                if (selected_tile >= 12 && selected_tile <= 15)
+                {
+                    checkAndSetDepot(effected_row, effected_col);
+                }
         }
     }
+
+    private void checkAndSetDepot(int row, int col)
+    {
+        int tile = map[row][col];
+
+        // If a depot was placed, check if adjacent to drill or factory
+        if (tile >= 12 && tile <= 15)
+        {
+            boolean nextToDrill = isAdjacentTo(row, col, new int[]{DRILL, DRILL_RESOURCE_1, DRILL_RESOURCE_2, DRILL_RESOURCE_3});
+            boolean nextToFactory = isAdjacentTo(row, col, new int[]{FACTORY_1, FACTORY_2, FACTORY_3});
+
+            if (nextToDrill && !firstDepotPlaced)
+            {
+                row_depot_pickup_1 = row;
+                col_depot_pickup_1 = col;
+                firstDepotPlaced = true;
+            }
+            else if (nextToFactory && !secondDepotPlaced)
+            {
+                row_depot_dropof_1 = row;
+                col_depot_dropof_1 = col;
+                secondDepotPlaced = true;
+            }
+        }
+        else if (tile == DRILL || tile == DRILL_RESOURCE_1 || tile == DRILL_RESOURCE_2 || tile == DRILL_RESOURCE_3)
+        {
+            int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+
+            for (int[] dir : directions)
+            {
+                int newRow = row + dir[0];
+                int newCol = col + dir[1];
+
+                if (newRow >= 0 && newRow < map.length && newCol >= 0 && newCol < map[0].length)
+                {
+                    int adjacentTile = map[newRow][newCol];
+
+                    if (adjacentTile >= 12 && adjacentTile <= 15)
+                    {
+                        checkAndSetDepot(newRow, newCol);
+                    }
+                }
+            }
+
+            return;
+        }
+
+        if (firstDepotPlaced && secondDepotPlaced && !vehicleSpawned)
+        {
+            spawnVehicle();
+            vehicleSpawned = true;
+        }
+    }
+
+    private boolean isAdjacentTo(int row, int col, int[] tileTypes)
+    {
+        int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+
+        for (int[] dir : directions)
+        {
+            int newRow = row + dir[0];
+            int newCol = col + dir[1];
+
+            if (newRow >= 0 && newRow < map.length && newCol >= 0 && newCol < map[0].length)
+            {
+                int tile = map[newRow][newCol];
+                for (int type : tileTypes)
+                {
+                    if (tile == type)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     private void handleRightClick()
     {
+        if (effected_row < 0 || effected_row >= map.length || effected_col < 0 || effected_col >= map[0].length)
+        {
+            return;
+        }
+        
         int currentTile = map[effected_row][effected_col];
 
-        if (currentTile == GRASS)
+        switch (currentTile)
         {
-            return;
+            case GRASS:
+                break;
+            
+            case RIVER_CROSSING_V:
+                money += 3;
+                map[effected_row][effected_col] = RIVER_H;
+                break;
+            
+            case RIVER_CROSSING_H:
+                money += 3;
+                map[effected_row][effected_col] = RIVER_V;
+                break;
+            
+            case HOUSE:
+                money -= 4;
+                map[effected_row][effected_col] = GRASS;
+                break;
+            
+            case FOREST:
+                money -= 1;
+                map[effected_row][effected_col] = GRASS;
+                break;
+        
+            case DRILL_RESOURCE_1:
+                money += 5;
+                map[effected_row][effected_col] = RESOURCE_1;
+                break;
+            
+            case DRILL_RESOURCE_2:
+                money += 5;
+                map[effected_row][effected_col] = RESOURCE_2;
+                break;
+            
+            case DRILL_RESOURCE_3:
+                money += 5;
+                map[effected_row][effected_col] = RESOURCE_3;
+                break;
+
+            case RIVER_V:
+            case RIVER_H:
+            case RIVER_CORNER_NE:
+            case RIVER_CORNER_NW:
+            case RIVER_CORNER_SW:
+            case RIVER_CORNER_SE:
+            case RESOURCE_1:
+            case RESOURCE_2:
+            case RESOURCE_3:
+            case FACTORY_1:
+            case FACTORY_2:
+            case FACTORY_3:
+                break;
+            
+            default:
+                if (currentTile >= 12 && currentTile <= 15)
+                {
+                    firstDepotPlaced = false;
+                    secondDepotPlaced = false;
+                    vehicleSpawned = false;
+                }
+                money++;
+                map[effected_row][effected_col] = GRASS;
         }
-
-        if (currentTile == RIVER_CROSSING_V)
-        {
-            money += 3;
-            map[effected_row][effected_col] = RIVER_H;
-            return;
-        }
-
-        if (currentTile == RIVER_CROSSING_H)
-        {
-            money += 3;
-            map[effected_row][effected_col] = RIVER_V;
-            return;
-        }
-
-        if (currentTile == HOUSE)
-        {
-            money -= 2;
-            map[effected_row][effected_col] = GRASS;
-            return;
-        }
-
-        if (currentTile == FOREST)
-        {
-            money -= 1;
-            map[effected_row][effected_col] = GRASS;
-            return;
-        }
-
-        if (currentTile == RIVER_V
-            || currentTile == RIVER_H
-            || currentTile == RIVER_CORNER_NE
-            || currentTile == RIVER_CORNER_NW
-            || currentTile == RIVER_CORNER_SW
-            || currentTile == RIVER_CORNER_SE
-
-            || currentTile == RESOURCE_1
-            || currentTile == RESOURCE_2
-            || currentTile == RESOURCE_3
-
-            || currentTile == FACTORY_1
-            || currentTile == FACTORY_2
-            || currentTile == FACTORY_3)
-        {
-            return;
-        }
-
-        money++;
-        map[effected_row][effected_col] = GRASS;
     }
+
     private void selectTile()
     {
-        if (Greenfoot.isKeyDown("1"))
-        {
-            selected_tile = 1;
-        }
-
-        if (Greenfoot.isKeyDown("2"))
-        {
-            selected_tile = 11;
-        }
-
-        if (Greenfoot.isKeyDown("3"))
-        {
-            selected_tile = 3;
-        }
-
-        if (Greenfoot.isKeyDown("4"))
-        {
-            selected_tile = 4;
-        }
-
-        if (Greenfoot.isKeyDown("5"))
-        {
-            selected_tile = 14;
-        }
+        updateSelectedTile("1", ROAD_V);
+        updateSelectedTile("2", CORNER_NW);
+        updateSelectedTile("3", CROSS);
+        updateSelectedTile("4", T_JUNCTION_UP);
+        updateSelectedTile("5", DEPOT_PICKUP_RIGHT);
+        updateSelectedTile("6", DRILL);
 
         if (Greenfoot.isKeyDown("r") && !rKeyWasDown)
         {
@@ -456,8 +700,21 @@ public class Level extends World
 
         rKeyWasDown = Greenfoot.isKeyDown("r");
     }
+
+    private void updateSelectedTile(String key, int tileId)
+    {
+        if (Greenfoot.isKeyDown(key))
+        {
+            selected_tile = tileId;
+        }
+    }
+
     private void highlightTile()
     {
+        if (effected_row < 0 || effected_row >= map.length || effected_col < 0 || effected_col >= map[0].length)
+        {
+            return;
+        }
         getBackground().setColor(new Color(0, 150, 255, 100));
 
         getBackground().fillRect(
@@ -467,81 +724,31 @@ public class Level extends World
             32
         );
     }
+
     private void rotate()
     {
-        // roads
-        if (selected_tile == 1)
-        {
-            selected_tile = 2;
-        }
+        selected_tile = rotateThrough(
+            selected_tile,
+            new int[]{ROAD_V, ROAD_H},
+            new int[]{T_JUNCTION_UP, T_JUNCTION_DOWN, T_JUNCTION_LEFT, T_JUNCTION_RIGHT},
+            new int[]{CORNER_NW, CORNER_SW, CORNER_SE, CORNER_NE},
+            new int[]{DEPOT_PICKUP_RIGHT, DEPOT_PICKUP_DOWN, DEPOT_PICKUP_LEFT, DEPOT_PICKUP_UP}
+        );
+    }
 
-        else if (selected_tile == 2)
+    private int rotateThrough(int current, int[]... cycles)
+    {
+        for (int[] cycle : cycles)
         {
-            selected_tile = 1;
+            for (int i = 0; i < cycle.length; i++)
+            {
+                if (cycle[i] == current)
+                {
+                    return cycle[(i + 1) % cycle.length];
+                }
+            }
         }
-
-        // t junctions
-        else if (selected_tile == 4)
-        {
-            selected_tile = 6;
-        }
-
-        else if (selected_tile == 6)
-        {
-            selected_tile = 7;
-        }
-
-        else if (selected_tile == 7)
-        {
-            selected_tile = 5;
-        }
-
-        else if (selected_tile == 5)
-        {
-            selected_tile = 4;
-        }
-
-        // corners
-        else if (selected_tile == 11)
-        {
-            selected_tile = 10;
-        }
-
-        else if (selected_tile == 10)
-        {
-            selected_tile = 9;
-        }
-
-        else if (selected_tile == 9)
-        {
-            selected_tile = 8;
-        }
-
-        else if (selected_tile == 8)
-        {
-            selected_tile = 11;
-        }
-
-        // depots
-        else if (selected_tile == 14)
-        {
-            selected_tile = 13;
-        }
-
-        else if (selected_tile == 13)
-        {
-            selected_tile = 12;
-        }
-
-        else if (selected_tile == 12)
-        {
-            selected_tile = 15;
-        }
-
-        else if (selected_tile == 15)
-        {
-            selected_tile = 14;
-        }
+        return current;
     }
 }
 

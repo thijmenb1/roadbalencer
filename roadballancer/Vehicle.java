@@ -23,6 +23,10 @@ public class Vehicle extends Actor
     private long lastActTime = 0;
     private boolean moving = false;
     private List<int[]> path;
+    
+    // Sprite variant selection (2x3 tilemap)
+    private String color; // "red", "blue", "yellow"
+    private boolean isFull; // true for full tank, false for empty
     /**
      * Act - do whatever the Vehicle wants to do. This method is called whenever
      * the 'Act' or 'Run' button gets pressed in the environment.
@@ -107,19 +111,61 @@ public class Vehicle extends Actor
         posX = current_col * 32 + 16;
         posY = current_row * 32 + 16;
         setLocation((int)Math.round(posX), (int)Math.round(posY));
+        setImageVariant();
         path = findPath(current_row, current_col, target_row, target_col);
     }       
-    public Vehicle(int start_row, int start_col, int target_row, int target_col){
+    public Vehicle(int start_row, int start_col, int target_row, int target_col, String color, boolean isFull){
         this.current_row = start_row;
         this.current_col = start_col;
         this.target_row = target_row;
         this.target_col = target_col;
+        this.color = color;
+        this.isFull = isFull;
     }
+    
+    private void setImageVariant() {
+        // Load the tilemap (2x3 layout: blue_empty, red_empty, yellow_empty / blue_full, red_full, yellow_full)
+        GreenfootImage tilemap = new GreenfootImage("trucks_topdown_spritesheet.png");
+        
+        // Determine the variant index based on color and fuel state
+        int variantIndex = 0;
+        if ("red".equalsIgnoreCase(color)) {
+            variantIndex = isFull ? 3 : 0;
+        } else if ("blue".equalsIgnoreCase(color)) {
+            variantIndex = isFull ? 4 : 1;
+        } else if ("yellow".equalsIgnoreCase(color)) {
+            variantIndex = isFull ? 5 : 2;
+        }
+        
+        // Calculate row and column in the tilemap (2 rows, 3 columns)
+        int row = variantIndex / 3;
+        int col = variantIndex % 3;
+        
+        // Each sprite is 11 pixels wide (33/3) and 32 pixels tall (64/2)
+        int spriteWidth = 11;
+        int spriteHeight = 32;
+        int x = col * spriteWidth;
+        int y = row * spriteHeight;
+        
+        // Create a new image for this vehicle with the correct sprite
+        GreenfootImage vehicleImage = new GreenfootImage(spriteWidth, spriteHeight);
+        vehicleImage.drawImage(tilemap, -x, -y);
+        setImage(vehicleImage);
+    }
+    
+    public void changeVariant(String newColor, boolean newIsFull) {
+        this.color = newColor;
+        this.isFull = newIsFull;
+        setImageVariant();
+    }
+    
     private List<int[]> findPath(int start_row, int start_col, int target_row, int target_col){
         int[][] map = Level.map;
-        boolean[][] visited = new boolean[20][20];
-        int[][] came_from_row = new int[20][20];
-        int[][] came_from_col = new int[20][20];
+        int numRows = map.length;
+        int numCols = map[0].length;
+        boolean[][] visited = new boolean[numRows][numCols];
+        int[][] came_from_row = new int[numRows][numCols];
+        int[][] came_from_col = new int[numRows][numCols];
         
         Queue<int[]> queue = new LinkedList<>();
         queue.add(new int[]{start_row, start_col});
@@ -140,14 +186,14 @@ public class Vehicle extends Actor
             for (int i = 0; i < 4; i++) {
                 int nr = r + dr[i];
                 int nc = c + dc[i];
-                int currentTile = map[r][c];
-                int nextTile = map[nr][nc];
-                if (nr >= 0 && nr < 20 && nc >= 0 && nc < 20 && !visited[nr][nc]) {
+                if (nr >= 0 && nr < numRows && nc >= 0 && nc < numCols && !visited[nr][nc]) {
+                    int currentTile = map[r][c];
+                    int nextTile = map[nr][nc];
 
                     if (nextTile != 0 &&
                         canMove(currentTile, dr[i], dc[i]) &&
                         canMove(nextTile, -dr[i], -dc[i])) {
-                
+
                         visited[nr][nc] = true;
                         came_from_row[nr][nc] = r;
                         came_from_col[nr][nc] = c;
