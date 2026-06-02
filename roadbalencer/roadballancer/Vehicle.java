@@ -4,18 +4,25 @@ import java.util.Queue;
 import java.util.LinkedList;
 import java.util.ArrayList;
 import java.util.Collections;
+
 /**
- * Write a description of class Vehicle here.
- * 
- * @author (your name) 
- * @version (a version number or a date)
+ * Vehicle class - represents a transport vehicle that moves between pickup and factory locations
  */
 public class Vehicle extends Actor
 {
+    // Position tracking
     private int current_row;
     private int current_col;
     private int target_row;
     private int target_col;
+    private int pickup_row;
+    private int pickup_col;
+    private int factory_row;
+    private int factory_col;
+
+    // Movement
+    private int lastWaitLocation_row = -1;
+    private int lastWaitLocation_col = -1;
     private int recalcCooldown = 0;
     private int targetX, targetY;
     private double posX, posY;
@@ -23,141 +30,199 @@ public class Vehicle extends Actor
     private long lastActTime = 0;
     private boolean moving = false;
     private List<int[]> path;
-    
-    // Sprite variant selection (2x3 tilemap)
+    private int waitTimer = 0;
+
+    // Constants
+    private static final int WAIT_TIME = 120;  // 2 seconds at 60 FPS
+    private static final int TILE_SIZE = 32;
+    private static final int RECALC_COOLDOWN = 30;
+
+    // Sprite variant selection
     private String color; // "red", "blue", "yellow"
-    private boolean isFull; // true for full tank, false for empty
-    /**
-     * Act - do whatever the Vehicle wants to do. This method is called whenever
-     * the 'Act' or 'Run' button gets pressed in the environment.
-     */
-        public void act()
+    private boolean isFull;
+
+    public Vehicle(int start_row, int start_col, int target_row, int target_col, String color, boolean isFull)
     {
-        if (Level.game_started == true) {
-              return;
+        this.current_row = start_row;
+        this.current_col = start_col;
+        this.target_row = target_row;
+        this.target_col = target_col;
+        this.pickup_row = start_row;
+        this.pickup_col = start_col;
+        this.factory_row = target_row;
+        this.factory_col = target_col;
+        this.color = color;
+        this.isFull = isFull;
+    }
+
+    public void act()
+    {
+        if (Level.game_started) {
+            return;
+        }
+        
+        // Handle waiting at destinations
+        if (waitTimer > 0) {
+            waitTimer--;
+            if (waitTimer == 0) {
+                handleDestinationReached();
+            }
+            return;
         }
         
         if (recalcCooldown > 0) recalcCooldown--;
 
         if ((path == null || path.isEmpty()) && recalcCooldown == 0) {
             path = findPath(current_row, current_col, target_row, target_col);
-            recalcCooldown = 30;
+            recalcCooldown = RECALC_COOLDOWN;
             return;
         }
 
         // Get next tile if not moving
         if (!moving && path != null && !path.isEmpty()) {
-            int[] next = path.remove(0);
-
-            current_row = next[0];
-            current_col = next[1];
-
-            targetX = current_col * 32 + 16;
-            targetY = current_row * 32 + 16;
-
-            moving = true;
+            moveToNextTile();
         }
 
-            // Smooth movement
+        // Smooth movement
         if (moving) {
-            if (lastActTime == 0) {
-                lastActTime = System.nanoTime();
-            }
-            long now = System.nanoTime();
-            double deltaSeconds = (now - lastActTime) / 1_000_000_000.0;
-            lastActTime = now;
-            if (deltaSeconds <= 0) {
-                return;
-            }
-
-            double dx = targetX - posX;
-            double dy = targetY - posY;
-            double distance = speed * deltaSeconds;
-
-            // Calculate angle (with offset because sprite faces UP)
-            int targetAngle = (int)Math.toDegrees(Math.atan2(dy, dx)) + 90;
-
-            // Smooth rotation
-            int current = getRotation();
-            int diff = targetAngle - current;
-
-            if (diff > 180) diff -= 360;
-            if (diff < -180) diff += 360;
-
-            int turnSpeed = 5;
-
-            if (Math.abs(diff) < turnSpeed) {
-                setRotation(targetAngle);
-            } else {
-                setRotation(current + (diff > 0 ? turnSpeed : -turnSpeed));
-            }
-
-            double distanceToTarget = Math.hypot(dx, dy);
-            if (distanceToTarget <= distance) {
-                posX = targetX;
-                posY = targetY;
-                setLocation(targetX, targetY);
-                moving = false;
-
-                // Check if vehicle arrived at final destination
-                if (current_row == target_row && current_col == target_col) {
-                    isFull = false;
-                    setImageVariant();
-                }
-            }
-            else {
-                double moveX = Math.cos(Math.atan2(dy, dx)) * distance;
-                double moveY = Math.sin(Math.atan2(dy, dx)) * distance;
-                posX += moveX;
-                posY += moveY;
-                setLocation((int)Math.round(posX), (int)Math.round(posY));
-            }
+            updateMovement();
         }
     }
+
+    private void handleDestinationReached()
+    {
+        if (current_row == pickup_row && current_col == pickup_col) {
+            // At pickup: fill up and head to factory
+            isFull = true;
+            setImageVariant();
+            target_row = factory_row;
+            target_col = factory_col;
+            path = findPath(current_row, current_col, target_row, target_col);
+            recalcCooldown = 0;
+        } else if (current_row == factory_row && current_col == factory_col) {
+            // At factory: empty and head back to pickup
+            isFull = false;
+            setImageVariant();
+            target_row = pickup_row;
+            target_col = pickup_col;
+            path = findPath(current_row, current_col, target_row, target_col);
+            recalcCooldown = 0;
+        }
+    }
+
+    private void moveToNextTile()
+    {
+        int[] next = path.remove(0);
+        current_row = next[0];
+        current_col = next[1];
+        targetX = current_col * TILE_SIZE + TILE_SIZE / 2;
+        targetY = current_row * TILE_SIZE + TILE_SIZE / 2;
+        moving = true;
+    }
+
+    private void updateMovement()
+    {
+        if (lastActTime == 0) {
+            lastActTime = System.nanoTime();
+        }
+        long now = System.nanoTime();
+        double deltaSeconds = (now - lastActTime) / 1_000_000_000.0;
+        lastActTime = now;
+        if (deltaSeconds <= 0) {
+            return;
+        }
+
+        double dx = targetX - posX;
+        double dy = targetY - posY;
+        double distance = speed * deltaSeconds;
+
+        // Calculate angle (with offset because sprite faces UP)
+        int targetAngle = (int)Math.toDegrees(Math.atan2(dy, dx)) + 90;
+        updateRotation(targetAngle);
+
+        double distanceToTarget = Math.hypot(dx, dy);
+        if (distanceToTarget <= distance) {
+            posX = targetX;
+            posY = targetY;
+            setLocation(targetX, targetY);
+            moving = false;
+            checkDestinationArrival();
+        }
+        else {
+            double moveX = Math.cos(Math.atan2(dy, dx)) * distance;
+            double moveY = Math.sin(Math.atan2(dy, dx)) * distance;
+            posX += moveX;
+            posY += moveY;
+            setLocation((int)Math.round(posX), (int)Math.round(posY));
+        }
+    }
+
+    private void updateRotation(int targetAngle)
+    {
+        int current = getRotation();
+        int diff = targetAngle - current;
+
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+
+        int turnSpeed = 5;
+
+        if (Math.abs(diff) < turnSpeed) {
+            setRotation(targetAngle);
+        } else {
+            setRotation(current + (diff > 0 ? turnSpeed : -turnSpeed));
+        }
+    }
+
+    private void checkDestinationArrival()
+    {
+        boolean atPickup = (current_row == pickup_row && current_col == pickup_col);
+        boolean atFactory = (current_row == factory_row && current_col == factory_col);
+        boolean justWaitedHere = (current_row == lastWaitLocation_row && current_col == lastWaitLocation_col);
+        
+        if ((atPickup || atFactory) && !justWaitedHere) {
+            waitTimer = WAIT_TIME;
+            lastWaitLocation_row = current_row;
+            lastWaitLocation_col = current_col;
+        }
+    }
+    
     public void addedToWorld(World world) {
-        posX = current_col * 32 + 16;
-        posY = current_row * 32 + 16;
+        posX = current_col * TILE_SIZE + TILE_SIZE / 2;
+        posY = current_row * TILE_SIZE + TILE_SIZE / 2;
         setLocation((int)Math.round(posX), (int)Math.round(posY));
         setImageVariant();
         path = findPath(current_row, current_col, target_row, target_col);
-    }       
-    public Vehicle(int start_row, int start_col, int target_row, int target_col, String color, boolean isFull){
-        this.current_row = start_row;
-        this.current_col = start_col;
-        this.target_row = target_row;
-        this.target_col = target_col;
-        this.color = color;
-        this.isFull = isFull;
     }
     
     private void setImageVariant() {
-        // Load the tilemap (2x3 layout: blue_empty, red_empty, yellow_empty / blue_full, red_full, yellow_full)
         GreenfootImage tilemap = new GreenfootImage("trucks_topdown_spritesheet.png");
-        
-        // Determine the variant index based on color and fuel state
-        int variantIndex = 0;
-        if ("red".equalsIgnoreCase(color)) {
-            variantIndex = isFull ? 3 : 0;
-        } else if ("blue".equalsIgnoreCase(color)) {
-            variantIndex = isFull ? 4 : 1;
-        } else if ("yellow".equalsIgnoreCase(color)) {
-            variantIndex = isFull ? 5 : 2;
-        }
+        int variantIndex = getVariantIndex();
         
         // Calculate row and column in the tilemap (2 rows, 3 columns)
+        final int SPRITE_WIDTH = 11;
+        final int SPRITE_HEIGHT = 32;
         int row = variantIndex / 3;
         int col = variantIndex % 3;
-        
-        // Each sprite is 11 pixels wide (33/3) and 32 pixels tall (64/2)
-        int spriteWidth = 11;
-        int spriteHeight = 32;
-        int x = col * spriteWidth;
-        int y = row * spriteHeight;
+        int x = col * SPRITE_WIDTH;
+        int y = row * SPRITE_HEIGHT;
         
         // Create a new image for this vehicle with the correct sprite
-        GreenfootImage vehicleImage = new GreenfootImage(spriteWidth, spriteHeight);
+        GreenfootImage vehicleImage = new GreenfootImage(SPRITE_WIDTH, SPRITE_HEIGHT);
         vehicleImage.drawImage(tilemap, -x, -y);
         setImage(vehicleImage);
+    }
+
+    private int getVariantIndex()
+    {
+        if ("red".equalsIgnoreCase(color)) {
+            return isFull ? 3 : 0;
+        } else if ("blue".equalsIgnoreCase(color)) {
+            return isFull ? 4 : 1;
+        } else if ("yellow".equalsIgnoreCase(color)) {
+            return isFull ? 5 : 2;
+        }
+        return 0;
     }
     
     public void changeVariant(String newColor, boolean newIsFull) {

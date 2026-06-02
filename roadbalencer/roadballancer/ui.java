@@ -1,13 +1,23 @@
-import greenfoot.*;  // (World, Actor, GreenfootImage, Greenfoot and MouseInfo)
+import greenfoot.*;
 
 /**
- * Write a description of class ui here.
- * 
- * @author (your name) 
- * @version (a version number or a date)
+ * UI class - displays quick-select tile panel and game information
  */
 public class ui extends Actor
 {
+    // UI Constants
+    private static final int SLOT_SIZE = 32;
+    private static final int SLOT_PADDING = 12;
+    private static final int COLS = 2;
+    private static final int ROWS = 3;
+    private static final int ROW_SPACING = SLOT_SIZE + SLOT_PADDING + 10;
+    private static final int PANEL_PADDING = 10;
+    private static final int KEY_LABEL_SIZE = 12;
+    private static final int KEY_LABEL_Y_OFFSET = 14;
+    private static final int TEXT_SIZE = 12;
+    private static final int TEXT_Y_OFFSET_TILE = 28;
+    private static final int TEXT_Y_OFFSET_MONEY = 10;
+
     private String[] tileNames = {
         "grass",             // 0
         "road v",            // 1
@@ -70,73 +80,80 @@ public class ui extends Actor
     {
         selectedTile();
     }
-    public void selectedTile(){
-        int slotSize = 32;
-        int slotPadding = 12;
-        int cols = 2;
-        int rows = 3;
-        int rowSpacing = slotSize + slotPadding + 10;
-        int gridWidth = cols * slotSize + (cols - 1) * slotPadding;
-        int gridHeight = slotSize * rows + (rows - 1) * rowSpacing;
-        int panelWidth = gridWidth + 20;
-        int panelHeight = gridHeight;
+    public void selectedTile()
+    {
+        int gridWidth = COLS * SLOT_SIZE + (COLS - 1) * SLOT_PADDING;
+        int gridHeight = SLOT_SIZE * ROWS + (ROWS - 1) * ROW_SPACING;
+        int panelWidth = gridWidth + 2 * PANEL_PADDING;
+        int panelHeight = gridHeight + 2 * PANEL_PADDING;
 
         GreenfootImage img = new GreenfootImage(panelWidth, panelHeight);
         img.setColor(new Color(0, 0, 0, 180));
         img.fillRect(0, 0, panelWidth, panelHeight);
 
-        int startX = 10;
-        int startY = 10;
+        int startX = PANEL_PADDING;
+        int startY = PANEL_PADDING;
 
         for (int i = 0; i < QUICK_SELECT_TILES.length; i++)
         {
-            int tileId = QUICK_SELECT_TILES[i];
             int displayTile = getDisplayTileIdForSlot(i);
-            int col = i % cols;
-            int row = i / cols;
-            int x = startX + col * (slotSize + slotPadding);
-            int y = startY + row * rowSpacing;
+            int col = i % COLS;
+            int row = i / COLS;
+            int x = startX + col * (SLOT_SIZE + SLOT_PADDING);
+            int y = startY + row * ROW_SPACING;
 
-            if (isSelectedQuickSlot(i))
-            {
-                img.setColor(Color.YELLOW);
-                img.drawRect(x - 1, y - 1, slotSize + 1, slotSize + 1);
-            }
-
-            GreenfootImage slotTile = getTileImage(displayTile, slotSize, slotSize);
-            img.drawImage(slotTile, x, y);
-
-            img.setFont(new Font("Arial", false, false, 12));
-            img.setColor(Color.WHITE);
-            String keyLabel = String.valueOf(i + 1);
-            int keyWidth = keyLabel.length() * 7;
-            int keyX = x + (slotSize - keyWidth) / 2;
-            img.drawString(keyLabel, keyX, y + slotSize + 14);
+            drawSlot(img, i, x, y, displayTile);
         }
 
-        img.setFont(new Font("Arial", false, false, 12));
+        drawTextInfo(img, panelWidth, panelHeight);
+        setImage(img);
+    }
+
+    private void drawSlot(GreenfootImage img, int slotIndex, int x, int y, int displayTile)
+    {
+        if (isSelectedQuickSlot(slotIndex))
+        {
+            img.setColor(Color.YELLOW);
+            img.drawRect(x - 1, y - 1, SLOT_SIZE + 1, SLOT_SIZE + 1);
+        }
+
+        GreenfootImage slotTile = getTileImage(displayTile, SLOT_SIZE, SLOT_SIZE);
+        img.drawImage(slotTile, x, y);
+
+        img.setFont(new Font("Arial", false, false, KEY_LABEL_SIZE));
+        img.setColor(Color.WHITE);
+        String keyLabel = String.valueOf(slotIndex + 1);
+        int keyWidth = keyLabel.length() * 7;
+        int keyX = x + (SLOT_SIZE - keyWidth) / 2;
+        img.drawString(keyLabel, keyX, y + SLOT_SIZE + KEY_LABEL_Y_OFFSET);
+    }
+
+    private void drawTextInfo(GreenfootImage img, int panelWidth, int panelHeight)
+    {
+        img.setFont(new Font("Arial", false, false, TEXT_SIZE));
         img.setColor(Color.WHITE);
 
         // Selected tile text
-        String tileLabel = (Level.selected_tile >= 0 && Level.selected_tile < tileNames.length)
-            ? tileNames[Level.selected_tile]
-            : "tile " + Level.selected_tile;
-
+        String tileLabel = getTileLabel(Level.selected_tile);
         int textWidth = tileLabel.length() * 7;
         int textX = (panelWidth - textWidth) / 2;
-
-        img.drawString(tileLabel, textX, panelHeight - 28);
+        img.drawString(tileLabel, textX, panelHeight - TEXT_Y_OFFSET_TILE);
 
         // Money text
         String moneyText = "$" + Level.money;
-
         int moneyWidth = moneyText.length() * 7;
         int moneyX = (panelWidth - moneyWidth) / 2;
+        img.drawString(moneyText, moneyX, panelHeight - TEXT_Y_OFFSET_MONEY);
+    }
 
-        img.drawString(moneyText, moneyX, panelHeight - 10);
-
-        setImage(img);
-            }
+    private String getTileLabel(int tileId)
+    {
+        if (tileId >= 0 && tileId < tileNames.length)
+        {
+            return tileNames[tileId];
+        }
+        return "tile " + tileId;
+    }
 
             private GreenfootImage getTileImage(int tileId, int width, int height)
             {
