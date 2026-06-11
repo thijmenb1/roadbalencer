@@ -6,7 +6,26 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 /**
- * Vehicle class - represents a transport vehicle that moves between pickup and factory locations
+ * Vehicle - a truck that moves resources between depots
+ * 
+ * Functions:
+ * - Vehicle()                  Receives all variables when created
+ * - addedToWorld()             Runs on creation
+ * - act()                      Main loop
+ * - handleDestinationReached() Updates the truck when arrives and prepares for return
+ * - checkDestinationArrival()  Checks whether the vehicle has arrived
+ * - moveToNextTile()           Sets next waypoint
+ * - updateMovement()           Moves the vehicle toward target
+ * - updateRotation()           Rotates sprite smoothly toward targetAngle
+ * - findPath()                 Pathfinding BFS over the road
+ * - tracePath()                Reconstructing the path for the return
+ * - canMove()                  Returns in what direction the vehicle can travel
+ * - setImageVariant            Sets the correct sprite from the spritesheet
+ * - getVariantIndex            Returns what img should be set
+ * - checkForDeletion()         Removes vehicle when removed from route
+ * 
+ * Know bugs:
+ * - the checkForDeletion is currently broken
  */
 public class Vehicle extends Actor
 {
@@ -19,49 +38,69 @@ public class Vehicle extends Actor
     private int pickup_col;
     private int factory_row;
     private int factory_col;
+    private int routeNumber;
+
+    // Identification
+    private int vehicleNumber;
+    private boolean Sell;
 
     // Movement
     private int lastWaitLocation_row = -1;
     private int lastWaitLocation_col = -1;
-    private int recalcCooldown = 0;
     private int targetX, targetY;
     private double posX, posY;
     private double speed = 64.0; // pixels per second
     private long lastActTime = 0;
     private boolean moving = false;
+
+    // Pathfinding
     private List<int[]> path;
+    private static final int RECALC_COOLDOWN = 30;
+    private int recalcCooldown = 0;
     private int waitTimer = 0;
 
     // Constants
     private static final int WAIT_TIME = 120;  // 2 seconds at 60 FPS
     private static final int TILE_SIZE = 32;
-    private static final int RECALC_COOLDOWN = 30;
+
 
     // Sprite variant selection
     private String color; // "red", "blue", "yellow"
     private boolean isFull;
 
-    public Vehicle(int start_row, int start_col, int target_row, int target_col, String color, boolean isFull)
+    public Vehicle(int start_row, int start_col, int target_row, int target_col, String color, boolean isFull, int routeNumber, int vehicleNumber, boolean Sell)
     {
-        this.current_row = start_row;
-        this.current_col = start_col;
-        this.target_row = target_row;
-        this.target_col = target_col;
-        this.pickup_row = start_row;
-        this.pickup_col = start_col;
-        this.factory_row = target_row;
-        this.factory_col = target_col;
-        this.color = color;
-        this.isFull = isFull;
+        this.current_row    = start_row;
+        this.current_col    = start_col;
+        this.target_row     = target_row;
+        this.target_col     = target_col;
+        this.pickup_row     = start_row;
+        this.pickup_col     = start_col;
+        this.factory_row    = target_row;
+        this.factory_col    = target_col;
+        this.color          = color;
+        this.isFull         = isFull;
+        this.routeNumber    = routeNumber;
+        this.vehicleNumber  = vehicleNumber;
+        this.Sell           = Sell;
     }
 
+    // Runs on creation prepares for route
+    public void addedToWorld(World world) {
+        posX = current_col * TILE_SIZE + TILE_SIZE / 2;
+        posY = current_row * TILE_SIZE + TILE_SIZE / 2;
+        Level level = (Level) world;
+        setLocation((int)Math.round(posX - level.getCameraX()), (int)Math.round(posY - level.getCameraY()));
+        setImageVariant();
+        path = findPath(current_row, current_col, target_row, target_col);
+    }
+
+    // Main loop
     public void act()
     {
-        if (Level.game_started) {
-            return;
-        }
-        
-        // Handle waiting at destinations
+        //checkForDeletion();
+       
+        // Waiting at destinations
         if (waitTimer > 0) {
             waitTimer--;
             if (waitTimer == 0) {
@@ -70,6 +109,7 @@ public class Vehicle extends Actor
             return;
         }
         
+        // Cooldown between path calculations
         if (recalcCooldown > 0) recalcCooldown--;
 
         if ((path == null || path.isEmpty()) && recalcCooldown == 0) {
@@ -89,6 +129,7 @@ public class Vehicle extends Actor
         }
     }
 
+    // Called when arriving at depot updating the vehicle state
     private void handleDestinationReached()
     {
         if (current_row == pickup_row && current_col == pickup_col) {
@@ -101,6 +142,7 @@ public class Vehicle extends Actor
             recalcCooldown = 0;
         } else if (current_row == factory_row && current_col == factory_col) {
             // At factory: empty and head back to pickup
+            if (Sell){Level.money++;}
             isFull = false;
             setImageVariant();
             target_row = pickup_row;
@@ -110,6 +152,7 @@ public class Vehicle extends Actor
         }
     }
 
+    // Adds the next pathfinding waypoint
     private void moveToNextTile()
     {
         int[] next = path.remove(0);
@@ -120,6 +163,7 @@ public class Vehicle extends Actor
         moving = true;
     }
 
+    // Updated vehicle position
     private void updateMovement()
     {
         if (lastActTime == 0) {
@@ -141,10 +185,11 @@ public class Vehicle extends Actor
         updateRotation(targetAngle);
 
         double distanceToTarget = Math.hypot(dx, dy);
+        Level level = (Level) getWorld();
         if (distanceToTarget <= distance) {
             posX = targetX;
             posY = targetY;
-            setLocation(targetX, targetY);
+            setLocation((int)(targetX - level.getCameraX()), (int)(targetY - level.getCameraY()));
             moving = false;
             checkDestinationArrival();
         }
@@ -153,10 +198,11 @@ public class Vehicle extends Actor
             double moveY = Math.sin(Math.atan2(dy, dx)) * distance;
             posX += moveX;
             posY += moveY;
-            setLocation((int)Math.round(posX), (int)Math.round(posY));
+            setLocation((int)Math.round(posX - level.getCameraX()), (int)Math.round(posY - level.getCameraY()));
         }
     }
 
+    // Rotates sprite smoothly toward targetAngle
     private void updateRotation(int targetAngle)
     {
         int current = getRotation();
@@ -174,6 +220,7 @@ public class Vehicle extends Actor
         }
     }
 
+    // Checks whether the vehicle has arrived at a depot
     private void checkDestinationArrival()
     {
         boolean atPickup = (current_row == pickup_row && current_col == pickup_col);
@@ -187,14 +234,8 @@ public class Vehicle extends Actor
         }
     }
     
-    public void addedToWorld(World world) {
-        posX = current_col * TILE_SIZE + TILE_SIZE / 2;
-        posY = current_row * TILE_SIZE + TILE_SIZE / 2;
-        setLocation((int)Math.round(posX), (int)Math.round(posY));
-        setImageVariant();
-        path = findPath(current_row, current_col, target_row, target_col);
-    }
-    
+
+    // Applies the correct sprite form the spritesheet
     private void setImageVariant() {
         GreenfootImage tilemap = new GreenfootImage("trucks_topdown_spritesheet.png");
         int variantIndex = getVariantIndex();
@@ -213,6 +254,7 @@ public class Vehicle extends Actor
         setImage(vehicleImage);
     }
 
+    // Returns the correct sprite
     private int getVariantIndex()
     {
         if ("red".equalsIgnoreCase(color)) {
@@ -225,12 +267,14 @@ public class Vehicle extends Actor
         return 0;
     }
     
+    // Changes the color and load state
     public void changeVariant(String newColor, boolean newIsFull) {
         this.color = newColor;
         this.isFull = newIsFull;
         setImageVariant();
     }
     
+    // Pathfinding with BFS finds the shortest valid route between two tiles
     private List<int[]> findPath(int start_row, int start_col, int target_row, int target_col){
         int[][] map = Level.map;
         int numRows = map.length;
@@ -276,6 +320,8 @@ public class Vehicle extends Actor
         }
         return null; // no path found
     }
+
+    // Reconstructing the path for the return
     private List<int[]> tracePath(int[][] came_from_row, int[][] came_from_col, int start_row, int start_col, int target_row, int target_col){
         List<int[]> path = new ArrayList<>();
         int r = target_row;
@@ -292,6 +338,8 @@ public class Vehicle extends Actor
         Collections.reverse(path);
         return path;
     }
+
+    // Returns in what direction the vehicle can travel
     private boolean canMove(int tile, int dr, int dc) {
         // dr = change in row, dc = change in col
     
@@ -323,5 +371,18 @@ public class Vehicle extends Actor
     
         return false;
     }
-}
 
+
+    public void checkForDeletion()
+    {
+        if (routeNumber >= Level.routes.size() || Level.routes.get(routeNumber) == null)
+        {
+            getWorld().removeObject(this);
+            return;
+        }
+        if (Level.routes.get(routeNumber).getVehicleCount() <= vehicleNumber)
+        {
+            getWorld().removeObject(this);
+        }
+    }
+}
